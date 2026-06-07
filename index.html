@@ -21,7 +21,7 @@
         
         .admin-scroll { max-height: 350px; overflow-y: auto; padding-right: 5px; margin-bottom: 15px; }
         .admin-field { background: #151924; border: 1px solid #333; padding: 10px; border-radius: 6px; margin-bottom: 10px; }
-        .admin-field label { font-size: 10px; color: #00b0ff; font-weight: bold; }
+        .admin-field label { font-size: 10px; color: #00b0ff; font-weight: bold; display: flex; justify-content: space-between; }
         .admin-field input { width: 100%; background: transparent; border: none; color: #fff; font-size: 14px; margin-top: 5px; outline: none; }
         
         .submit-btn { width: 100%; background: #00b0ff; border: none; border-radius: 6px; padding: 14px; color: white; font-weight: bold; cursor: pointer; font-size: 14px; transition: background 0.2s; }
@@ -29,6 +29,9 @@
         
         .user-select-list { margin-bottom: 15px; background: #151924; border: 1px solid #333; color: white; width: 100%; padding: 12px; border-radius: 6px; outline: none; font-size: 14px; }
         #adminMainConsole { display: none; width: 100%; }
+        
+        /* Live Price Styling */
+        .live-price-tag { font-weight: bold; color: #00e676; font-size: 10px; }
     </style>
 </head>
 <body>
@@ -148,13 +151,55 @@
             const currentBaseVal = serverBases[asset.val] || asset.base;
             list.innerHTML += `
                 <div class="admin-field">
-                    <label>${asset.name} Base Value</label>
+                    <label>
+                        <span>${asset.name} Base Value</span>
+                        <span class="live-price-tag" id="live-${asset.val}">Live: Loading...</span>
+                    </label>
                     <input type="number" class="adm-crypto-input" data-symbol="${asset.val}" value="${currentBaseVal}" step="0.0001">
                 </div>`;
         });
 
         fetchAllUsersList();
+        
+        // Start Binance real-time updates
+        fetchBinancePrices();
+        setInterval(fetchBinancePrices, 5000); // Har 5 seconds me price refresh hogi
+
         setInterval(refreshConsoleHackStatusLabel, 1000); // Live countdown clock inside admin view
+    }
+
+    // Binance API Fetch Logic
+    async function fetchBinancePrices() {
+        try {
+            const response = await fetch('https://api.binance.com/api/v3/ticker/price');
+            if (!response.ok) return;
+            const data = await response.json();
+            
+            // Tickers mapping array ko object dictionary me convert kiya complex loops se bachne k liye
+            const prices = {};
+            data.forEach(item => {
+                prices[item.symbol] = parseFloat(item.price);
+            });
+
+            cryptoAssets.forEach(asset => {
+                const liveEl = document.getElementById(`live-${asset.val}`);
+                if (!liveEl) return;
+
+                const binanceTicker = asset.val + "USDT";
+                if (prices[binanceTicker]) {
+                    const priceVal = prices[binanceTicker];
+                    // Formatting dynamic decimal positions base on size
+                    const formattedPrice = priceVal > 1 ? priceVal.toFixed(2) : priceVal.toFixed(4);
+                    liveEl.innerText = `Live: $${formattedPrice}`;
+                    liveEl.style.color = "#00e676";
+                } else {
+                    liveEl.innerText = `Live: N/A`;
+                    liveEl.style.color = "#ff3d00";
+                }
+            });
+        } catch (e) {
+            console.error("Binance API error: ", e);
+        }
     }
 
     // Function to calculate execution data updates live
